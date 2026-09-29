@@ -3,7 +3,13 @@ import axios from 'axios';
 import { Helmet } from 'react-helmet-async';
 import FileUploader from '../components/FileUploader';
 
-const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000/api/pdf';
+// Cleanly sanitize any rogue brackets, markdown links, or trailing slashes
+const cleanUrl = (url) => {
+  if (!url) return 'https://pdfman-1h8j.onrender.com/api/pdf';
+  return url.replace(/[\[\]()]/g, '').trim().replace(/\/+$/, '');
+};
+
+const API_BASE = cleanUrl(process.env.REACT_APP_API_URL);
 
 export default function UnlockPdfPage() {
   const [file, setFile] = useState(null);
@@ -32,6 +38,9 @@ export default function UnlockPdfPage() {
 
     try {
       const res = await axios.post(`${API_BASE}/unlock-pdf`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        },
         responseType: 'blob'
       });
 
@@ -157,6 +166,7 @@ export default function UnlockPdfPage() {
 
             <div className="d-flex gap-2 mt-4">
               <button
+                type="button"
                 onClick={handleUnlock}
                 disabled={loading}
                 className="btn btn-danger btn-lg flex-grow-1 fw-bold"
@@ -174,6 +184,7 @@ export default function UnlockPdfPage() {
                 )}
               </button>
               <button
+                type="button"
                 onClick={() => {
                   setFile(null);
                   setPassword('');
@@ -188,7 +199,7 @@ export default function UnlockPdfPage() {
           </div>
         )}
 
-        {/* Indexable SEO Content Section for Search Ranking */}
+        {/* Indexable SEO Content Section */}
         <div className="mt-5 text-start border-top pt-4 text-muted">
           <h3 className="h5 fw-bold text-dark mb-3">How to unlock and remove passwords from PDF</h3>
           <ol className="small ps-3 mb-4">

@@ -6,7 +6,13 @@ import FileUploader from '../components/FileUploader';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
-const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000/api/pdf';
+// Cleanly sanitize any rogue brackets, markdown links, or trailing slashes
+const cleanUrl = (url) => {
+  if (!url) return 'https://pdfman-1h8j.onrender.com/api/pdf';
+  return url.replace(/[\[\]()]/g, '').trim().replace(/\/+$/, '');
+};
+
+const API_BASE = cleanUrl(process.env.REACT_APP_API_URL);
 
 export default function WatermarkPdfPage() {
   const [file, setFile] = useState(null);
@@ -102,6 +108,9 @@ export default function WatermarkPdfPage() {
 
     try {
       const res = await axios.post(`${API_BASE}/add-watermark`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        },
         responseType: 'blob'
       });
 
@@ -179,7 +188,7 @@ export default function WatermarkPdfPage() {
               subtitle="or drop PDF here"
             />
 
-            {/* Indexable SEO Content Section for Search Ranking */}
+            {/* Indexable SEO Content Section */}
             <div className="mt-5 text-start border-top pt-4 text-muted">
               <h3 className="h5 fw-bold text-dark mb-3">How to add a watermark to PDF files online</h3>
               <ol className="small ps-3 mb-4">
@@ -259,9 +268,13 @@ export default function WatermarkPdfPage() {
                               whiteSpace: 'nowrap'
                             }}
                           >
-                            {mode === 'text' ? text : imagePreviewUrl ? (
+                            {mode === 'text' ? (
+                              text
+                            ) : imagePreviewUrl ? (
                               <img src={imagePreviewUrl} alt="Watermark preview" style={{ width: '50px', height: 'auto' }} />
-                            ) : '[Image]'}
+                            ) : (
+                              '[Image]'
+                            )}
                           </div>
                         ))}
                       </div>
@@ -276,9 +289,13 @@ export default function WatermarkPdfPage() {
                           whiteSpace: 'nowrap'
                         }}
                       >
-                        {mode === 'text' ? text : imagePreviewUrl ? (
+                        {mode === 'text' ? (
+                          text
+                        ) : imagePreviewUrl ? (
                           <img src={imagePreviewUrl} alt="Watermark preview" style={{ width: '100px', height: 'auto' }} />
-                        ) : '[Image]'}
+                        ) : (
+                          '[Image]'
+                        )}
                       </div>
                     )}
                   </div>
@@ -291,6 +308,7 @@ export default function WatermarkPdfPage() {
                   <div className="d-flex justify-content-between align-items-center mb-3">
                     <h5 className="fw-bold mb-0">Watermark options</h5>
                     <button
+                      type="button"
                       className="btn btn-sm btn-outline-secondary rounded-pill"
                       onClick={() => {
                         setFile(null);
@@ -471,6 +489,7 @@ export default function WatermarkPdfPage() {
 
                   {/* Action CTA */}
                   <button
+                    type="button"
                     onClick={handleSubmit}
                     disabled={loading}
                     className="btn btn-danger btn-lg w-100 fw-bold rounded-3 shadow-sm d-flex align-items-center justify-content-center gap-2"

@@ -3,7 +3,13 @@ import axios from 'axios';
 import { Helmet } from 'react-helmet-async';
 import FileUploader from '../components/FileUploader';
 
-const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000/api/pdf';
+// Cleanly sanitize any rogue brackets, markdown links, or trailing slashes
+const cleanUrl = (url) => {
+  if (!url) return 'https://pdfman-1h8j.onrender.com/api/pdf';
+  return url.replace(/[\[\]()]/g, '').trim().replace(/\/+$/, '');
+};
+
+const API_BASE = cleanUrl(process.env.REACT_APP_API_URL);
 
 export default function HtmlToPdfPage() {
   const [activeTab, setActiveTab] = useState('file'); // 'file' | 'url' | 'code'
@@ -66,6 +72,9 @@ export default function HtmlToPdfPage() {
 
     try {
       const response = await axios.post(`${API_BASE}/html-to-pdf`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        },
         responseType: 'blob'
       });
 
@@ -135,18 +144,21 @@ export default function HtmlToPdfPage() {
         {/* Tabs Switcher */}
         <div className="d-flex justify-content-center gap-2 mb-4">
           <button
+            type="button"
             onClick={() => { setActiveTab('file'); setErrorMsg(''); }}
             className={`btn btn-sm rounded-pill px-3 py-2 fw-semibold ${activeTab === 'file' ? 'btn-dark' : 'btn-outline-secondary'}`}
           >
             <i className="bi bi-upload me-1"></i> Upload File (.html)
           </button>
           <button
+            type="button"
             onClick={() => { setActiveTab('url'); setErrorMsg(''); }}
             className={`btn btn-sm rounded-pill px-3 py-2 fw-semibold ${activeTab === 'url' ? 'btn-dark' : 'btn-outline-secondary'}`}
           >
             <i className="bi bi-globe me-1"></i> Webpage URL
           </button>
           <button
+            type="button"
             onClick={() => { setActiveTab('code'); setErrorMsg(''); }}
             className={`btn btn-sm rounded-pill px-3 py-2 fw-semibold ${activeTab === 'code' ? 'btn-dark' : 'btn-outline-secondary'}`}
           >
@@ -173,6 +185,7 @@ export default function HtmlToPdfPage() {
                     {file.name}
                   </span>
                   <button
+                    type="button"
                     className="btn btn-sm btn-outline-secondary rounded-pill"
                     onClick={() => setFile(null)}
                   >
@@ -232,6 +245,7 @@ export default function HtmlToPdfPage() {
 
           {/* Action Button */}
           <button
+            type="button"
             onClick={handleConvert}
             disabled={loading || (activeTab === 'file' && !file)}
             className="btn btn-danger btn-lg w-100 fw-bold rounded-3 shadow-sm mt-4 d-flex align-items-center justify-content-center gap-2"
@@ -250,7 +264,7 @@ export default function HtmlToPdfPage() {
           </button>
         </div>
 
-        {/* Indexable SEO Content Section for Search Ranking */}
+        {/* Indexable SEO Content Section */}
         <div className="mt-5 text-start border-top pt-4 text-muted">
           <h3 className="h5 fw-bold text-dark mb-3">How to Convert HTML to PDF Online</h3>
           <ol className="small ps-3 mb-4">

@@ -3,7 +3,13 @@ import axios from 'axios';
 import { Helmet } from 'react-helmet-async';
 import FileUploader from '../components/FileUploader';
 
-const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000/api/pdf';
+// Cleanly sanitize any rogue brackets, markdown links, or trailing slashes from the API URL
+const cleanUrl = (url) => {
+  if (!url) return 'https://pdfman-1h8j.onrender.com/api/pdf';
+  return url.replace(/[\[\]()]/g, '').trim().replace(/\/+$/, '');
+};
+
+const API_BASE = cleanUrl(process.env.REACT_APP_API_URL);
 
 export default function CompressPdfPage() {
   const [file, setFile] = useState(null);
@@ -22,6 +28,9 @@ export default function CompressPdfPage() {
 
     try {
       const response = await axios.post(`${API_BASE}/compress`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        },
         responseType: 'blob'
       });
 
@@ -197,7 +206,7 @@ export default function CompressPdfPage() {
                 {compressing ? (
                   <>
                     <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                    Compressing via Python engine...
+                    Compressing PDF...
                   </>
                 ) : (
                   'Compress PDF'
@@ -223,7 +232,7 @@ export default function CompressPdfPage() {
           <ol className="small ps-3 mb-4">
             <li className="mb-2"><strong>Upload Your Document:</strong> Drag and drop your PDF or select it from your device.</li>
             <li className="mb-2"><strong>Choose Compression Profile:</strong> Pick between Extreme (email ready), Recommended (standard web sharing), or Low compression (print precision).</li>
-            <li className="mb-2"><strong>Compress:</strong> Click Compress PDF to run the optimization via our Python/PyMuPDF backend.</li>
+            <li className="mb-2"><strong>Compress:</strong> Click Compress PDF to run the optimization process.</li>
             <li><strong>Instant Download:</strong> Save the compressed PDF directly to your device.</li>
           </ol>
 

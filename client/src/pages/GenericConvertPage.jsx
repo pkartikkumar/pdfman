@@ -3,6 +3,14 @@ import axios from 'axios';
 import { useParams } from 'react-router-dom';
 import FileUploader from '../components/FileUploader';
 
+// Cleanly sanitize any rogue brackets, markdown links, or trailing slashes from the API URL
+const cleanUrl = (url) => {
+  if (!url) return 'https://pdfman-1h8j.onrender.com/api/pdf';
+  return url.replace(/[\[\]()]/g, '').trim().replace(/\/+$/, '');
+};
+
+const API_BASE = cleanUrl(process.env.REACT_APP_API_URL);
+
 export default function GenericConvertPage() {
   const { action } = useParams();
   const [file, setFile] = useState(null);
@@ -122,7 +130,10 @@ export default function GenericConvertPage() {
     formData.append('file', file);
 
     try {
-      const response = await axios.post(`http://localhost:5000/api/pdf/${config.endpoint}`, formData, {
+      const response = await axios.post(`${API_BASE}/${config.endpoint}`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        },
         responseType: 'blob'
       });
 
@@ -181,9 +192,11 @@ export default function GenericConvertPage() {
 
           <div className="d-flex gap-2">
             <button
+              type="button"
               onClick={handleConvert}
               disabled={loading}
-              className="btn btn-brand btn-lg flex-grow-1 fw-bold"
+              className="btn btn-danger btn-lg flex-grow-1 fw-bold"
+              style={{ backgroundColor: '#DC2626', borderColor: '#DC2626' }}
             >
               {loading ? (
                 <>
@@ -195,6 +208,7 @@ export default function GenericConvertPage() {
               )}
             </button>
             <button
+              type="button"
               onClick={() => setFile(null)}
               disabled={loading}
               className="btn btn-outline-secondary btn-lg fw-semibold"

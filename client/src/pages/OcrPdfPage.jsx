@@ -3,7 +3,13 @@ import axios from 'axios';
 import { Helmet } from 'react-helmet-async';
 import FileUploader from '../components/FileUploader';
 
-const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000/api/pdf';
+// Cleanly sanitize any rogue brackets, markdown links, or trailing slashes
+const cleanUrl = (url) => {
+  if (!url) return 'https://pdfman-1h8j.onrender.com/api/pdf';
+  return url.replace(/[\[\]()]/g, '').trim().replace(/\/+$/, '');
+};
+
+const API_BASE = cleanUrl(process.env.REACT_APP_API_URL);
 
 export default function OcrPdfPage() {
   const [file, setFile] = useState(null);
@@ -20,6 +26,9 @@ export default function OcrPdfPage() {
 
     try {
       const response = await axios.post(`${API_BASE}/ocr-pdf`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        },
         responseType: 'blob'
       });
 
@@ -123,6 +132,7 @@ export default function OcrPdfPage() {
 
             <div className="d-flex gap-2">
               <button
+                type="button"
                 onClick={handleProcessOcr}
                 disabled={loading}
                 className="btn btn-danger btn-lg flex-grow-1 fw-bold"
@@ -138,6 +148,7 @@ export default function OcrPdfPage() {
                 )}
               </button>
               <button
+                type="button"
                 onClick={() => {
                   setFile(null);
                   setErrorMsg('');
@@ -151,7 +162,7 @@ export default function OcrPdfPage() {
           </div>
         )}
 
-        {/* Indexable SEO Content Section for Search Ranking */}
+        {/* Indexable SEO Content Section */}
         <div className="mt-5 text-start border-top pt-4 text-muted">
           <h3 className="h5 fw-bold text-dark mb-3">How to make scanned PDFs searchable</h3>
           <ol className="small ps-3 mb-4">

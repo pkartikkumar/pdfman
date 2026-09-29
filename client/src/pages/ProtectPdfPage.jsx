@@ -6,7 +6,13 @@ import FileUploader from '../components/FileUploader';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
-const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000/api/pdf';
+// Cleanly sanitize any rogue brackets, markdown links, or trailing slashes
+const cleanUrl = (url) => {
+  if (!url) return 'https://pdfman-1h8j.onrender.com/api/pdf';
+  return url.replace(/[\[\]()]/g, '').trim().replace(/\/+$/, '');
+};
+
+const API_BASE = cleanUrl(process.env.REACT_APP_API_URL);
 
 export default function ProtectPdfPage() {
   const [file, setFile] = useState(null);
@@ -66,6 +72,9 @@ export default function ProtectPdfPage() {
 
     try {
       const res = await axios.post(`${API_BASE}/protect-pdf`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        },
         responseType: 'blob'
       });
 
@@ -211,6 +220,7 @@ export default function ProtectPdfPage() {
 
             <div className="d-flex gap-2 mt-4">
               <button
+                type="button"
                 onClick={handleProtect}
                 disabled={loading}
                 className="btn btn-danger btn-lg flex-grow-1 fw-bold"
@@ -228,6 +238,7 @@ export default function ProtectPdfPage() {
                 )}
               </button>
               <button
+                type="button"
                 onClick={() => {
                   setFile(null);
                   setPassword('');
@@ -244,7 +255,7 @@ export default function ProtectPdfPage() {
           </div>
         )}
 
-        {/* Indexable SEO Content Section for Search Ranking */}
+        {/* Indexable SEO Content Section */}
         <div className="mt-5 text-start border-top pt-4 text-muted">
           <h3 className="h5 fw-bold text-dark mb-3">How to password protect a PDF file online</h3>
           <ol className="small ps-3 mb-4">

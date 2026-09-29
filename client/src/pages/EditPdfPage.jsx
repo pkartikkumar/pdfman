@@ -7,7 +7,13 @@ import FileUploader from '../components/FileUploader';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
-const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000/api/pdf';
+// Cleanly sanitize any rogue brackets, markdown links, or trailing slashes
+const cleanUrl = (url) => {
+  if (!url) return 'https://pdfman-1h8j.onrender.com/api/pdf';
+  return url.replace(/[\[\]()]/g, '').trim().replace(/\/+$/, '');
+};
+
+const API_BASE = cleanUrl(process.env.REACT_APP_API_URL);
 
 const COLOR_PRESETS = [
   '#000000', '#1E3A8A', '#2563EB', '#0D9488', '#16A34A',
@@ -24,8 +30,7 @@ export default function EditPdfPage() {
 
   const [editorMode, setEditorMode] = useState('edit');
 
-  // Paragraph blocks per page in Native PDF Coordinates:
-  // { [pageNum]: [ { id, text, origText, pdfBbox: [x0,y0,x1,y1], screen: {x, y, w, h}, fontSize, fontFamily, bold, italic, underline, align, color, isEdited } ] }
+  // Paragraph blocks per page in Native PDF Coordinates
   const [blocksByPage, setBlocksByPage] = useState({});
   const [selectedBlockId, setSelectedBlockId] = useState(null);
 
@@ -95,7 +100,15 @@ export default function EditPdfPage() {
       await page.render({ canvasContext: ctx, viewport }).promise;
       if (cancel) return;
 
-      if (!blocksByPage[currentPage]) {
+      setBlocksByPage((prev) => {
+        if (prev[currentPage]) {
+          prev[currentPage].forEach((p) => {
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(p.screen.x - 2, p.screen.y - 2, p.screen.w + 4, p.screen.h + 4);
+          });
+          return prev;
+        }
+
         // Group items into coherent paragraphs
         const rawItems = textContent.items;
         const paragraphs = [];
@@ -136,9 +149,10 @@ export default function EditPdfPage() {
           } else {
             if (currentP) paragraphs.push(currentP);
 
-            const isSerif = (item.fontName || '').toLowerCase().includes('times') ||
-                            (item.fontName || '').toLowerCase().includes('serif') ||
-                            (item.fontName || '').toLowerCase().includes('roman');
+            const isSerif =
+              (item.fontName || '').toLowerCase().includes('times') ||
+              (item.fontName || '').toLowerCase().includes('serif') ||
+              (item.fontName || '').toLowerCase().includes('roman');
 
             currentP = {
               id: `blk_${currentPage}_${idx}`,
@@ -166,13 +180,8 @@ export default function EditPdfPage() {
           ctx.fillRect(p.screen.x - 2, p.screen.y - 2, p.screen.w + 4, p.screen.h + 4);
         });
 
-        setBlocksByPage((prev) => ({ ...prev, [currentPage]: paragraphs }));
-      } else {
-        blocksByPage[currentPage].forEach((p) => {
-          ctx.fillStyle = '#FFFFFF';
-          ctx.fillRect(p.screen.x - 2, p.screen.y - 2, p.screen.w + 4, p.screen.h + 4);
-        });
-      }
+        return { ...prev, [currentPage]: paragraphs };
+      });
     };
 
     renderPdf();
@@ -215,13 +224,12 @@ export default function EditPdfPage() {
     }));
   };
 
-  // 3. Save Changes via Python PyMuPDF Engine (Zero vertical collisions)
+  // 3. Save Changes via Backend Engine
   const handleSaveChanges = async () => {
     if (!file) return;
     setIsProcessing(true);
 
     try {
-      // Structure edits per page
       const editsPayload = {};
       Object.keys(blocksByPage).forEach((pg) => {
         const editedBlocks = blocksByPage[pg].filter((b) => b.isEdited);
@@ -244,6 +252,9 @@ export default function EditPdfPage() {
       formData.append('edits', JSON.stringify(editsPayload));
 
       const response = await axios.post(`${API_BASE}/apply-pdf-edits`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        },
         responseType: 'blob'
       });
 
@@ -251,7 +262,17 @@ export default function EditPdfPage() {
       setDownloadBlobUrl(url);
       setShowSuccessModal(true);
     } catch (err) {
-      alert('Failed to process edits: ' + (err.response?.data?.error || err.message));
+      if (err.response && err.response.data instanceof Blob) {
+        const errorText = await err.response.data.text();
+        try {
+          const parsed = JSON.parse(errorText);
+          alert('Failed to process edits: ' + (parsed.error || parsed.message));
+        } catch {
+          alert('Failed to process edits. Please verify backend status.');
+        }
+      } else {
+        alert('Failed to process edits: ' + (err.response?.data?.error || err.message));
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -292,7 +313,6 @@ export default function EditPdfPage() {
       <div className="d-flex flex-column vh-100 bg-white" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
         {/* 1. TOP NAVBAR */}
         <nav className="border-bottom px-3 py-1 d-flex align-items-center justify-content-between flex-shrink-0" style={{ height: '52px', backgroundColor: '#F8FAFC' }}>
-          {/* Hidden Input for Top-Right "Open File" Button */}
           <input
             type="file"
             ref={fileInputRef}
@@ -306,12 +326,12 @@ export default function EditPdfPage() {
             }}
           />
 
-          {/* Left Toolbar: Show Annotate / Edit & Tools ONLY when a PDF is selected */}
           <div className="d-flex align-items-center gap-3">
             {file ? (
               <>
                 <div className="d-flex bg-white rounded-pill border p-1 shadow-sm">
                   <button
+                    type="button"
                     className={`btn btn-sm rounded-pill px-3 py-1 border-0 fw-semibold ${editorMode === 'annotate' ? 'bg-secondary bg-opacity-10 text-dark' : 'text-muted'}`}
                     onClick={() => setEditorMode('annotate')}
                     style={{ fontSize: '13px' }}
@@ -319,6 +339,7 @@ export default function EditPdfPage() {
                     <i className="bi bi-pen me-1"></i> Annotate <span className="badge bg-secondary rounded-pill ms-1" style={{ fontSize: '10px' }}>12</span>
                   </button>
                   <button
+                    type="button"
                     className={`btn btn-sm rounded-pill px-3 py-1 border-0 fw-bold ${editorMode === 'edit' ? 'text-white shadow-sm' : 'text-muted'}`}
                     onClick={() => setEditorMode('edit')}
                     style={{ fontSize: '13px', backgroundColor: editorMode === 'edit' ? '#DC2626' : 'transparent' }}
@@ -330,10 +351,10 @@ export default function EditPdfPage() {
                 <div className="vr mx-1" style={{ height: '22px' }}></div>
 
                 <div className="d-flex align-items-center gap-1">
-                  <button className="btn btn-sm btn-light border-0 text-muted px-2" title="Text"><i className="bi bi-type fs-6"></i></button>
-                  <button className="btn btn-sm btn-light border-0 text-muted px-2" title="Image"><i className="bi bi-image fs-6"></i></button>
-                  <button className="btn btn-sm btn-light border-0 text-muted px-2" title="Shapes"><i className="bi bi-square fs-6"></i></button>
-                  <button className="btn btn-sm btn-light border-0 text-muted px-2" title="Insert Text Box"><i className="bi bi-textarea-t fs-6"></i></button>
+                  <button type="button" className="btn btn-sm btn-light border-0 text-muted px-2" title="Text"><i className="bi bi-type fs-6"></i></button>
+                  <button type="button" className="btn btn-sm btn-light border-0 text-muted px-2" title="Image"><i className="bi bi-image fs-6"></i></button>
+                  <button type="button" className="btn btn-sm btn-light border-0 text-muted px-2" title="Shapes"><i className="bi bi-square fs-6"></i></button>
+                  <button type="button" className="btn btn-sm btn-light border-0 text-muted px-2" title="Insert Text Box"><i className="bi bi-textarea-t fs-6"></i></button>
                 </div>
               </>
             ) : (
@@ -343,16 +364,15 @@ export default function EditPdfPage() {
             )}
           </div>
 
-          {/* Center: File Name (Only when loaded) */}
           {file && (
             <div className="d-none d-md-flex align-items-center text-muted small fw-semibold">
               <i className="bi bi-file-earmark-pdf text-danger me-1"></i> {file.name}
             </div>
           )}
 
-          {/* Right: Open File Button (Triggers native file browser) */}
           <div className="d-flex align-items-center gap-2">
             <button
+              type="button"
               className="btn btn-sm btn-outline-secondary rounded-pill px-3 fw-semibold d-flex align-items-center gap-1"
               onClick={() => fileInputRef.current && fileInputRef.current.click()}
             >
@@ -375,7 +395,6 @@ export default function EditPdfPage() {
               subtitle="Exact in-place typing matching iLovePDF"
             />
 
-            {/* Indexable SEO Content Section for Search Engines */}
             <div className="mt-5 text-start border-top pt-4 text-muted">
               <h3 className="h6 fw-bold text-dark mb-2">How to Edit Existing PDF Text Directly:</h3>
               <ol className="small ps-3 mb-4">
@@ -396,7 +415,7 @@ export default function EditPdfPage() {
                   <div
                     key={idx}
                     onClick={() => { setCurrentPage(idx + 1); setSelectedBlockId(null); }}
-                    className={`card text-center p-1 rounded-2 cursor-pointer ${currentPage === idx + 1 ? 'border-primary shadow-sm' : 'border-light'}`}
+                    className={`card text-center p-1 rounded-2 ${currentPage === idx + 1 ? 'border-primary shadow-sm' : 'border-light'}`}
                     style={{ cursor: 'pointer', borderWidth: currentPage === idx + 1 ? '2px' : '1px' }}
                   >
                     <img src={thumbUrl} alt={`Page ${idx + 1}`} className="img-fluid rounded" />
@@ -409,17 +428,17 @@ export default function EditPdfPage() {
             {/* Central Canvas Viewport */}
             <main className="flex-grow-1 bg-secondary bg-opacity-10 d-flex flex-column align-items-center position-relative overflow-auto p-4">
               <div className="position-sticky top-0 z-3 mb-3 bg-white border px-3 py-1 rounded-pill shadow-sm d-flex align-items-center gap-3">
-                <button className="btn btn-sm btn-link text-dark p-0" disabled={currentPage <= 1} onClick={() => setCurrentPage((p) => p - 1)}>
+                <button type="button" className="btn btn-sm btn-link text-dark p-0" disabled={currentPage <= 1} onClick={() => setCurrentPage((p) => p - 1)}>
                   <i className="bi bi-chevron-left"></i>
                 </button>
                 <span className="small fw-semibold">{currentPage} / {numPages}</span>
-                <button className="btn btn-sm btn-link text-dark p-0" disabled={currentPage >= numPages} onClick={() => setCurrentPage((p) => p + 1)}>
+                <button type="button" className="btn btn-sm btn-link text-dark p-0" disabled={currentPage >= numPages} onClick={() => setCurrentPage((p) => p + 1)}>
                   <i className="bi bi-chevron-right"></i>
                 </button>
                 <div className="vr"></div>
-                <button className="btn btn-sm btn-link text-dark p-0" onClick={() => setScale((s) => Math.max(0.7, s - 0.15))}><i className="bi bi-dash"></i></button>
+                <button type="button" className="btn btn-sm btn-link text-dark p-0" onClick={() => setScale((s) => Math.max(0.7, s - 0.15))}><i className="bi bi-dash"></i></button>
                 <span className="small text-muted">{Math.round(scale * 100)}%</span>
-                <button className="btn btn-sm btn-link text-dark p-0" onClick={() => setScale((s) => Math.min(2.0, s + 0.15))}><i className="bi bi-plus"></i></button>
+                <button type="button" className="btn btn-sm btn-link text-dark p-0" onClick={() => setScale((s) => Math.min(2.0, s + 0.15))}><i className="bi bi-plus"></i></button>
               </div>
 
               <div className="position-relative bg-white shadow rounded-1 mb-5" style={{ display: 'inline-block', height: 'fit-content' }}>
@@ -451,7 +470,6 @@ export default function EditPdfPage() {
                           padding: '1px 3px'
                         }}
                       >
-                        {/* Corner Grips & Lower Paragraph Label */}
                         {isSelected && (
                           <>
                             <div className="position-absolute bg-primary border border-white" style={{ width: '7px', height: '7px', top: '-4px', left: '-4px' }}></div>
@@ -465,7 +483,6 @@ export default function EditPdfPage() {
                           </>
                         )}
 
-                        {/* Native Reflowing Paragraph Content */}
                         <div
                           contentEditable
                           suppressContentEditableWarning
@@ -498,7 +515,7 @@ export default function EditPdfPage() {
               <div className="d-flex flex-column gap-4">
                 <div className="d-flex justify-content-between align-items-center">
                   <h6 className="fw-bold mb-0 text-dark">Text Styles</h6>
-                  <button className="btn btn-sm btn-link text-muted p-0" onClick={() => setSelectedBlockId(null)}>
+                  <button type="button" className="btn btn-sm btn-link text-muted p-0" onClick={() => setSelectedBlockId(null)}>
                     <i className="bi bi-x-lg"></i>
                   </button>
                 </div>
@@ -535,24 +552,28 @@ export default function EditPdfPage() {
                 {/* B / I / U */}
                 <div className="d-flex justify-content-between border rounded p-1">
                   <button
+                    type="button"
                     className={`btn btn-sm border-0 flex-grow-1 ${textStyles.bold ? 'bg-light fw-bold text-dark' : 'text-muted'}`}
                     onClick={() => updateStyle({ bold: !textStyles.bold })}
                   >
                     <i className="bi bi-type-bold fs-6"></i>
                   </button>
                   <button
+                    type="button"
                     className={`btn btn-sm border-0 flex-grow-1 ${textStyles.italic ? 'bg-light text-dark' : 'text-muted'}`}
                     onClick={() => updateStyle({ italic: !textStyles.italic })}
                   >
                     <i className="bi bi-type-italic fs-6"></i>
                   </button>
                   <button
+                    type="button"
                     className={`btn btn-sm border-0 flex-grow-1 ${textStyles.underline ? 'bg-light text-dark' : 'text-muted'}`}
                     onClick={() => updateStyle({ underline: !textStyles.underline })}
                   >
                     <i className="bi bi-type-underline fs-6"></i>
                   </button>
                   <button
+                    type="button"
                     className="btn btn-sm border-0 flex-grow-1 text-muted"
                     onClick={() => updateStyle({ text: '' })}
                   >
@@ -562,16 +583,16 @@ export default function EditPdfPage() {
 
                 {/* Alignment */}
                 <div className="d-flex justify-content-between border rounded p-1">
-                  <button className={`btn btn-sm border-0 flex-grow-1 ${textStyles.align === 'left' ? 'bg-light text-dark' : 'text-muted'}`} onClick={() => updateStyle({ align: 'left' })}>
+                  <button type="button" className={`btn btn-sm border-0 flex-grow-1 ${textStyles.align === 'left' ? 'bg-light text-dark' : 'text-muted'}`} onClick={() => updateStyle({ align: 'left' })}>
                     <i className="bi bi-text-left fs-6"></i>
                   </button>
-                  <button className={`btn btn-sm border-0 flex-grow-1 ${textStyles.align === 'center' ? 'bg-light text-dark' : 'text-muted'}`} onClick={() => updateStyle({ align: 'center' })}>
+                  <button type="button" className={`btn btn-sm border-0 flex-grow-1 ${textStyles.align === 'center' ? 'bg-light text-dark' : 'text-muted'}`} onClick={() => updateStyle({ align: 'center' })}>
                     <i className="bi bi-text-center fs-6"></i>
                   </button>
-                  <button className={`btn btn-sm border-0 flex-grow-1 ${textStyles.align === 'right' ? 'bg-light text-dark' : 'text-muted'}`} onClick={() => updateStyle({ align: 'right' })}>
+                  <button type="button" className={`btn btn-sm border-0 flex-grow-1 ${textStyles.align === 'right' ? 'bg-light text-dark' : 'text-muted'}`} onClick={() => updateStyle({ align: 'right' })}>
                     <i className="bi bi-text-right fs-6"></i>
                   </button>
-                  <button className={`btn btn-sm border-0 flex-grow-1 ${textStyles.align === 'justify' ? 'bg-light text-dark' : 'text-muted'}`} onClick={() => updateStyle({ align: 'justify' })}>
+                  <button type="button" className={`btn btn-sm border-0 flex-grow-1 ${textStyles.align === 'justify' ? 'bg-light text-dark' : 'text-muted'}`} onClick={() => updateStyle({ align: 'justify' })}>
                     <i className="bi bi-justify fs-6"></i>
                   </button>
                 </div>
@@ -607,6 +628,7 @@ export default function EditPdfPage() {
               {/* Bottom Save changes */}
               <div className="pt-3 border-top mt-4">
                 <button
+                  type="button"
                   onClick={handleSaveChanges}
                   disabled={isProcessing}
                   className="btn btn-danger w-100 py-2 fw-bold rounded-3 shadow-sm d-flex align-items-center justify-content-center gap-2"

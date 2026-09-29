@@ -2,7 +2,14 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import FileUploader from '../components/FileUploader';
 
-const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000/api/pdf';
+// Cleanly sanitize any rogue brackets, markdown links, or trailing slashes from the API URL
+const cleanUrl = (url) => {
+  if (!url) return 'https://pdfman-1h8j.onrender.com/api/pdf';
+  return url.replace(/[\[\]()]/g, '').trim().replace(/\/+$/, '');
+};
+
+const API_BASE = cleanUrl(process.env.REACT_APP_API_URL);
+
 export default function CompressImagePage() {
   const [file, setFile] = useState(null);
   const [level, setLevel] = useState('recommended'); // 'low' | 'recommended' | 'high'
@@ -22,6 +29,9 @@ export default function CompressImagePage() {
 
     try {
       const response = await axios.post(`${API_BASE}/compress-image`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        },
         responseType: 'blob'
       });
 
@@ -41,6 +51,7 @@ export default function CompressImagePage() {
         name: `pdfMan_compressed_${baseName}${ext}`
       });
     } catch (err) {
+      console.error('Compression request failed:', err);
       alert('Failed to compress image. Check backend server.');
     } finally {
       setLoading(false);
@@ -82,7 +93,7 @@ export default function CompressImagePage() {
             <div className="col-4">
               <div
                 onClick={() => setLevel('low')}
-                className={`card p-3 text-center border-2 cursor-pointer ${level === 'low' ? 'border-danger bg-danger bg-opacity-10' : 'border-light'}`}
+                className={`card p-3 text-center border-2 ${level === 'low' ? 'border-danger bg-danger bg-opacity-10' : 'border-light'}`}
                 style={{ cursor: 'pointer' }}
               >
                 <span className="fw-bold small">Extreme</span>
@@ -92,7 +103,7 @@ export default function CompressImagePage() {
             <div className="col-4">
               <div
                 onClick={() => setLevel('recommended')}
-                className={`card p-3 text-center border-2 cursor-pointer ${level === 'recommended' ? 'border-danger bg-danger bg-opacity-10' : 'border-light'}`}
+                className={`card p-3 text-center border-2 ${level === 'recommended' ? 'border-danger bg-danger bg-opacity-10' : 'border-light'}`}
                 style={{ cursor: 'pointer' }}
               >
                 <span className="fw-bold small">Recommended</span>
@@ -102,7 +113,7 @@ export default function CompressImagePage() {
             <div className="col-4">
               <div
                 onClick={() => setLevel('high')}
-                className={`card p-3 text-center border-2 cursor-pointer ${level === 'high' ? 'border-danger bg-danger bg-opacity-10' : 'border-light'}`}
+                className={`card p-3 text-center border-2 ${level === 'high' ? 'border-danger bg-danger bg-opacity-10' : 'border-light'}`}
                 style={{ cursor: 'pointer' }}
               >
                 <span className="fw-bold small">Less</span>
