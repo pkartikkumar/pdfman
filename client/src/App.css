@@ -1,0 +1,88 @@
+/* Global Site Background */
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  /* Use relative path from src/App.css to your image */
+  background-image: url('./assets/images/bg-pattern.png');
+  background-repeat: no-repeat;
+  background-position: center top;
+  background-size: cover;
+  background-attachment: fixed;
+  background-color: #f8fafc;
+}
+
+.navbar {
+  background-color: rgba(255, 255, 255, 0.747) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  padding: 6px !important;
+}
+.custom-dropdown-menu {
+  background-color: rgba(255, 255, 255, 0.747) !important;
+  border: none !important;
+}
+.card {
+  background-color: rgba(255, 255, 255, 0.445) !important;
+  backdrop-filter: blur(8px);
+}
+.brandLogo{
+  height: 80px;
+  width: auto;
+}
+
+.brand-red {
+  color: #e5322d !important;
+}
+
+.btn-brand {
+  background-color: #e5322d;
+  color: white;
+  border: none;
+}
+.btn-brand:hover {
+  background-color: #c9241f;
+  color: white;
+}
+
+.tool-card {
+  border: 1px solid #eef0f2;
+  border-radius: 12px;
+  background: white;
+  transition: all 0.25s ease-in-out;
+}
+.tool-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.08);
+}
+
+.drop-zone {
+  border: 2px dashed #cbd5e1;
+  border-radius: 16px;
+  background-color: #ffffff;
+  transition: border-color 0.2s;
+  cursor: pointer;
+}
+.drop-zone:hover {
+  border-color: #e5322d;
+  background-color: #fffbfa;
+}
+
+/* Ensure the page wrapper stretches so footer sticks to bottom */
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+Footer {
+  margin-top: auto;
+  padding: 10px 0;
+  border-top: 1px solid #e5e7eb;
+}
+
+/* Footer Link Hover Styling */
+.hover-red:hover {
+  color: #e53e3e !important;
+  transition: color 0.2s ease-in-out;
+}
