@@ -202,14 +202,19 @@ export default function EditPdfPage() {
     });
   };
 
-  // Live in-place text update
+  // Immediate live text update (onInput + onBlur)
   const handleTextChange = (id, newText) => {
-    setBlocksByPage((prev) => ({
-      ...prev,
-      [currentPage]: (prev[currentPage] || []).map((b) =>
-        b.id === id ? { ...b, text: newText, isEdited: true } : b
-      )
-    }));
+    setBlocksByPage((prev) => {
+      const pageBlocks = prev[currentPage] || [];
+      const updated = pageBlocks.map((b) => {
+        if (b.id === id) {
+          const isChanged = newText !== b.origText;
+          return { ...b, text: newText, isEdited: isChanged };
+        }
+        return b;
+      });
+      return { ...prev, [currentPage]: updated };
+    });
   };
 
   const updateStyle = (patch) => {
@@ -227,16 +232,31 @@ export default function EditPdfPage() {
   // 3. Save Changes via Backend Engine
   const handleSaveChanges = async () => {
     if (!file) return;
+
+    // Force blur on any currently focused contentEditable to guarantee state sync
+    if (document.activeElement && document.activeElement.getAttribute('contenteditable')) {
+      document.activeElement.blur();
+    }
+
     setIsProcessing(true);
 
     try {
       const editsPayload = {};
       Object.keys(blocksByPage).forEach((pg) => {
-        const editedBlocks = blocksByPage[pg].filter((b) => b.isEdited);
+        const pageList = blocksByPage[pg] || [];
+        // Send blocks marked as edited, or blocks where text differs from original
+        const editedBlocks = pageList.filter((b) => b.isEdited || b.text !== b.origText);
+
         if (editedBlocks.length > 0) {
           editsPayload[pg] = editedBlocks.map((b) => ({
-            bbox: b.pdfBbox,
+            bbox: [
+              Math.min(b.pdfBbox[0], b.pdfBbox[2]),
+              Math.min(b.pdfBbox[1], b.pdfBbox[3]),
+              Math.max(b.pdfBbox[0], b.pdfBbox[2]),
+              Math.max(b.pdfBbox[1], b.pdfBbox[3])
+            ],
             text: b.text,
+            origText: b.origText,
             fontFamily: b.fontFamily,
             fontSize: b.fontSize,
             bold: b.bold,
@@ -246,6 +266,12 @@ export default function EditPdfPage() {
           }));
         }
       });
+
+      if (Object.keys(editsPayload).length === 0) {
+        alert('No edits detected to save. Click directly on any text block and modify the text before saving.');
+        setIsProcessing(false);
+        return;
+      }
 
       const formData = new FormData();
       formData.append('file', file);
@@ -336,7 +362,7 @@ export default function EditPdfPage() {
                     onClick={() => setEditorMode('annotate')}
                     style={{ fontSize: '13px' }}
                   >
-                    <i className="bi bi-pen me-1"></i> Annotate <span className="badge bg-secondary rounded-pill ms-1" style={{ fontSize: '10px' }}>12</span>
+                    <i className="bi bi-pen me-1"></i> Annotate
                   </button>
                   <button
                     type="button"
@@ -344,7 +370,7 @@ export default function EditPdfPage() {
                     onClick={() => setEditorMode('edit')}
                     style={{ fontSize: '13px', backgroundColor: editorMode === 'edit' ? '#DC2626' : 'transparent' }}
                   >
-                    <i className="bi bi-pencil-square me-1"></i> Edit <span className="badge bg-white text-danger rounded-pill ms-1" style={{ fontSize: '10px' }}>4</span>
+                    <i className="bi bi-pencil-square me-1"></i> Edit
                   </button>
                 </div>
 
@@ -415,7 +441,7 @@ export default function EditPdfPage() {
                   <div
                     key={idx}
                     onClick={() => { setCurrentPage(idx + 1); setSelectedBlockId(null); }}
-                    className={`card text-center p-1 rounded-2 ${currentPage === idx + 1 ? 'border-primary shadow-sm' : 'border-light'}`}
+                    className={`card text-center p-1 rounded-2 ${currentPage === idx + 1 ? 'border-danger shadow-sm' : 'border-light'}`}
                     style={{ cursor: 'pointer', borderWidth: currentPage === idx + 1 ? '2px' : '1px' }}
                   >
                     <img src={thumbUrl} alt={`Page ${idx + 1}`} className="img-fluid rounded" />
@@ -487,6 +513,7 @@ export default function EditPdfPage() {
                           contentEditable
                           suppressContentEditableWarning
                           onFocus={() => handleSelectBlock(block)}
+                          onInput={(e) => handleTextChange(block.id, e.currentTarget.innerText)}
                           onBlur={(e) => handleTextChange(block.id, e.currentTarget.innerText)}
                           style={{
                             outline: 'none',
@@ -575,7 +602,10 @@ export default function EditPdfPage() {
                   <button
                     type="button"
                     className="btn btn-sm border-0 flex-grow-1 text-muted"
-                    onClick={() => updateStyle({ text: '' })}
+                    onClick={() => {
+                      if (!selectedBlockId) return;
+                      handleTextChange(selectedBlockId, '');
+                    }}
                   >
                     <i className="bi bi-eraser fs-6"></i>
                   </button>

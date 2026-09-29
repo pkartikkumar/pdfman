@@ -68,10 +68,18 @@ export default function PdfToImgPage() {
       const isZip = numPages > 1;
       const downloadExt = isZip ? 'zip' : format;
 
-      const blobUrl = URL.createObjectURL(new Blob([res.data]));
+      // Ensure browser receives exact MIME type so it doesn't infer .txt
+      const mimeType = isZip
+        ? 'application/zip'
+        : format === 'png'
+        ? 'image/png'
+        : 'image/jpeg';
+
+      const blob = new Blob([res.data], { type: mimeType });
+      const blobUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = blobUrl;
-      link.download = `pdfMan_${originalBaseName}_${isZip ? 'images.zip' : downloadExt}`;
+      link.download = `pdfMan_${originalBaseName}.${downloadExt}`;
       document.body.appendChild(link);
       link.click();
       link.remove();

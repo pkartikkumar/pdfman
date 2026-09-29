@@ -631,6 +631,7 @@ exports.unlockPdf = (req, res) => {
   );
 };
 
+
 // 16. Convert HTML / Webpage / Code to PDF (High Accuracy via Headless Chromium)
 exports.convertHtmlToPdf = async (req, res) => {
   const timestamp = Date.now();
@@ -669,23 +670,38 @@ exports.convertHtmlToPdf = async (req, res) => {
 
     // Try High-Accuracy Headless Chromium (Puppeteer)
     let puppeteerSuccess = false;
+    let browser = null;
+
     try {
       const puppeteer = require('puppeteer');
-      const browser = await puppeteer.launch({
+      browser = await puppeteer.launch({
         headless: 'new',
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+          '--no-first-run',
+          '--no-zygote',
+          '--single-process'
+        ]
       });
 
       const page = await browser.newPage();
 
-      // Configure desktop viewport for responsive layouts
-      await page.setViewport({ width: 1280, height: 800 });
+      // Set desktop user-agent so modern sites don't serve stripped-down bot HTML
+      await page.setUserAgent(
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      );
+
+      // Configure wide desktop viewport for proper flex/grid layout
+      await page.setViewport({ width: 1440, height: 960 });
 
       if (targetUrl) {
-        // Wait until network traffic settles so JS frameworks (React, Vue, Next.js) render completely
+        // Wait until network traffic settles completely
         await page.goto(targetUrl, {
-          waitUntil: 'networkidle2',
-          timeout: 30000
+          waitUntil: 'networkidle0',
+          timeout: 45000
         });
       } else {
         await page.setContent(rawHtmlContent, {
@@ -694,32 +710,41 @@ exports.convertHtmlToPdf = async (req, res) => {
         });
       }
 
-      // Generate standard print-accurate A4 PDF
+      // CRITICAL: Emulate screen CSS instead of print CSS (preserves navbars, cards, and buttons)
+      await page.emulateMediaType('screen');
+
+      // Generate visual PDF
       await page.pdf({
         path: expectedPdfPath,
         format: 'A4',
-        printBackground: true, // Retains CSS backgrounds, gradients, and images
+        printBackground: true, // Preserves CSS backgrounds, colors, images
+        preferCSSPageSize: false,
         margin: {
-          top: '12mm',
-          right: '12mm',
-          bottom: '12mm',
-          left: '12mm'
+          top: '10mm',
+          right: '10mm',
+          bottom: '10mm',
+          left: '10mm'
         }
       });
 
       await browser.close();
+      browser = null;
       puppeteerSuccess = true;
     } catch (puppeteerErr) {
-      console.warn('Puppeteer conversion failed or not installed, falling back to local engine:', puppeteerErr.message);
+      if (browser) await browser.close().catch(() => {});
+      console.error('Puppeteer conversion failed:', puppeteerErr);
     }
 
-    // Fallback: If Puppeteer is not installed or encountered an issue
+    // Fallback: If Puppeteer cannot run in the environment, use PyMuPDF
     if (!puppeteerSuccess) {
       if (rawHtmlContent) {
         fs.writeFileSync(tempHtmlPath, rawHtmlContent, 'utf8');
       } else if (targetUrl) {
         const webRes = await fetch(targetUrl, {
-          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+          }
         });
         const html = await webRes.text();
         fs.writeFileSync(tempHtmlPath, html, 'utf8');
@@ -741,11 +766,13 @@ exports.convertHtmlToPdf = async (req, res) => {
     res.download(expectedPdfPath, downloadFileName, (downloadErr) => {
       if (downloadErr) console.error('Download error:', downloadErr);
       if (fs.existsSync(expectedPdfPath)) fs.unlinkSync(expectedPdfPath);
+      if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
     });
 
   } catch (error) {
     if (fs.existsSync(tempHtmlPath)) fs.unlinkSync(tempHtmlPath);
     if (fs.existsSync(expectedPdfPath)) fs.unlinkSync(expectedPdfPath);
+    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
     console.error('HTML to PDF Error:', error);
     res.status(500).json({ error: error.message || 'Failed to render webpage into PDF.' });
   }

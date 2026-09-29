@@ -7,3 +7,5 @@ numpy
 easyocr
 rembg
 Pillow
+pandas
+reportlab
