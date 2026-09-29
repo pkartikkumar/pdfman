@@ -1,0 +1,9 @@
+PyMuPDF
+pdf2docx
+pdfplumber
+openpyxl
+python-pptx
+numpy
+easyocr
+rembg
+Pillow
